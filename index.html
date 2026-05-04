@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gesture Grab & Drop Candies</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0e1a;--panel:#111827;--panel2:#1a2235;--border:#2a3755;--accent:#4f8ef7;--accent2:#7c5dfa;--green:#22d3a5;--yellow:#fbbf24;--text:#e2e8f0;--dim:#64748b}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;user-select:none}
+#app{width:100vw;height:100vh;display:flex;flex-direction:column}
+#header{display:flex;align-items:center;justify-content:space-between;padding:10px 24px;background:var(--panel);border-bottom:1px solid var(--border);z-index:10}
+#header h1{font-size:1.1rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#gesture-status{display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--dim)}
+#gesture-label{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.78rem;font-weight:600;letter-spacing:0.5px;color:var(--accent);min-width:180px;text-align:center;transition:color 0.2s,border-color 0.2s}
+#gesture-label.grab{color:var(--yellow);border-color:var(--yellow)}
+#gesture-label.release{color:var(--green);border-color:var(--green)}
+.dot{width:8px;height:8px;border-radius:50%;background:#ef4444;animation:pulse 1.2s ease-in-out infinite}
+.dot.active{background:var(--green)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+#main{flex:1;display:flex;position:relative;overflow:hidden}
+#video-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0.15;filter:grayscale(0.8) contrast(1.1);pointer-events:none}
+#lm-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+#cursor{position:absolute;width:26px;height:26px;border-radius:50%;border:2.5px solid var(--accent);background:rgba(79,142,247,0.18);transform:translate(-50%,-50%);pointer-events:none;z-index:100;transition:border-color 0.15s,transform 0.06s,background 0.15s,width 0.15s,height 0.15s;display:none}
+#cursor.grab{width:38px;height:38px;border-color:var(--yellow);background:rgba(251,191,36,0.22)}
+#cursor.release{width:16px;height:16px;border-color:var(--green);background:rgba(34,211,165,0.35)}
+#drag-area{width:100%;height:100%;display:flex;flex-direction:row;position:relative;z-index:5;padding:20px;gap:20px}
+#left-panel{width:50%;height:100%;display:flex;flex-direction:column;gap:16px}
+#right-panel{width:50%;height:100%;display:flex;flex-direction:column;gap:16px}
+#drag-title{font-size:1.1rem;color:var(--text);text-align:center;padding:8px}
+.score-row{display:flex;gap:14px;width:100%;margin-bottom:10px}
+.score-box{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center}
+.score-box .s-val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.score-box .s-lbl{font-size:0.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.8px}
+.shelf{width:100%;background:transparent;border:2px solid rgba(42,55,85,0.3);border-radius:16px;padding:16px 20px;position:relative;flex:1;display:flex;flex-direction:column;transition:border-color 0.2s,box-shadow 0.2s}
+.shelf-label{font-size:0.72rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.items-row{display:flex;gap:14px;flex-wrap:wrap;min-height:70px;align-items:center;flex:1;padding:8px}
+.shelf.drop-hover{box-shadow:0 0 0 3px var(--accent),0 0 20px rgba(79,142,247,0.3);border-color:var(--accent);background:transparent}
+.shelf.drop-ok{box-shadow:0 0 0 3px var(--green),0 0 20px rgba(34,211,165,0.3);border-color:var(--green);background:transparent}
+.item{width:192px;height:192px;border-radius:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:4.8rem;cursor:pointer;position:relative;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;border:1.5px solid transparent;background:var(--panel2)}
+.item.hovered{transform:scale(1.08);box-shadow:0 0 18px rgba(79,142,247,0.45);border-color:var(--accent)}
+.item.grabbed{transform:scale(1.2)!important;box-shadow:0 0 30px rgba(124,93,250,0.5);border-color:var(--accent2);z-index:200}
+.item .item-lbl{font-size:0.9rem;color:var(--dim);margin-top:6px;letter-spacing:0.4px}
+#ghost-el{position:absolute;width:222px;height:222px;border-radius:48px;display:flex;align-items:center;justify-content:center;font-size:6.6rem;background:var(--panel2);border:2.5px solid var(--accent2);box-shadow:0 0 36px rgba(124,93,250,0.5);pointer-events:none;z-index:500;transform:translate(-50%,-50%);display:none}
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel);border:1px solid var(--border);border-radius:30px;padding:10px 26px;font-size:0.85rem;z-index:999;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#guide{position:fixed;inset:0;background:rgba(10,14,26,0.92);display:flex;align-items:center;justify-content:center;z-index:900;backdrop-filter:blur(6px)}
+#guide-box{background:var(--panel);border:1px solid var(--border);border-radius:24px;padding:36px 40px;max-width:540px;width:92%;text-align:center}
+#guide-box h2{font-size:1.5rem;font-weight:800;margin-bottom:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#guide-box p.sub{color:var(--dim);font-size:0.85rem;margin-bottom:28px}
+.gestures-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px}
+.g-card{background:var(--panel2);border:1px solid var(--border);border-radius:14px;padding:16px 12px;text-align:left}
+.g-card .g-icon{font-size:1.8rem;margin-bottom:6px}
+.g-card .g-name{font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:3px}
+.g-card .g-desc{font-size:0.7rem;color:var(--dim);line-height:1.4}
+.btn-row{display:flex;gap:12px;justify-content:center}
+#start-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:13px 36px;border-radius:30px;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;transition:opacity 0.2s}
+#start-btn:hover{opacity:0.88}
+#mouse-btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:13px 30px;border-radius:30px;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.5px;transition:opacity 0.2s}
+#mouse-btn:hover{opacity:0.88}
+#loading{position:fixed;inset:0;background:rgba(10,14,26,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:950}
+#loading h3{font-size:1.1rem;color:var(--dim)}
+#loading .sub{font-size:0.75rem;color:var(--dim)}
+.pbar{width:260px;height:4px;background:var(--border);border-radius:4px;overflow:hidden}
+.pfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;width:0;transition:width 0.3s}
+#reset-btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 20px;border-radius:20px;font-size:0.8rem;font-weight:600;cursor:pointer;letter-spacing:0.5px;transition:opacity 0.2s,border-color 0.2s,box-shadow 0.2s;display:none}
+#reset-btn:hover{opacity:0.88;background:var(--accent);color:#fff}
+#reset-btn.btn-hover{box-shadow:0 0 0 3px var(--accent),0 0 20px rgba(79,142,247,0.5);border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div style="font-size:2.2rem">👍</div>
+  <h3>Loading hand tracking model...</h3>
+  <div class="pbar"><div class="pfill" id="prog-fill"></div></div>
+  <p class="sub">Powered by MediaPipe / Chrome or Edge recommended</p>
+</div>
+
+<div id="guide" style="display:none">
+  <div id="guide-box">
+    <h2>Gesture Grab & Drop Candies</h2>
+    <p class="sub">Track thumb - grab candies and move them anywhere!</p>
+    <div class="gestures-grid">
+      <div class="g-card"><div class="g-icon">✋</div><div class="g-name">HOVER</div><div class="g-desc">Open hand - move cursor with thumb</div></div>
+      <div class="g-card"><div class="g-icon">✊</div><div class="g-name">GRAB</div><div class="g-desc">Make a fist over an item, hold ~0.5s to grab</div></div>
+      <div class="g-card"><div class="g-icon">🖐️</div><div class="g-name">RELEASE / DROP</div><div class="g-desc">Open hand over any zone to release item</div></div>
+      <div class="g-card"><div class="g-icon">🎯</div><div class="g-name">THUMB</div><div class="g-desc">Cursor tracks your thumb tip</div></div>
+    </div>
+    <p style="font-size:0.78rem;color:var(--dim);margin-bottom:20px">No camera? Click "Mouse Mode" to use mouse as fallback.</p>
+    <div class="btn-row">
+      <button id="start-btn">🎥 Start Camera</button>
+      <button id="mouse-btn">🖱️ Mouse Mode</button>
+    </div>
+  </div>
+</div>
+
+<div id="cursor"></div>
+<div id="ghost-el"></div>
+
+<div id="app">
+  <div id="header">
+    <h1>Gesture Grab & Drop Candies</h1>
+    <div style="display:flex;align-items:center;gap:14px">
+      <div id="gesture-status">
+        <div id="gesture-label">Initializing...</div>
+        <div id="cam-badge"><div class="dot" id="cam-dot"></div><span id="cam-text">Camera off</span></div>
+      </div>
+      <button id="reset-btn">🔄 Reset</button>
+    </div>
+  </div>
+  <div id="main">
+    <video id="video-bg" autoplay muted playsinline></video>
+    <canvas id="lm-canvas"></canvas>
+    <div id="drag-area">
+      <div id="left-panel">
+        <div id="drag-title">🍬 Left Zone - Grab & Drop</div>
+        <div class="score-row">
+          <div class="score-box"><div class="s-val" id="sl">5</div><div class="s-lbl">Left Items</div></div>
+          <div class="score-box"><div class="s-val" id="sr">0</div><div class="s-lbl">Right Items</div></div>
+        </div>
+        <div class="shelf" id="left-shelf">
+          <div class="shelf-label">✊ Make fist over an item to GRAB (hold 0.5s)</div>
+          <div class="items-row" id="src-items"></div>
+        </div>
+      </div>
+      <div id="right-panel">
+        <div style="height:52px"></div>
+        <div style="height:67px"></div>
+        <div class="shelf" id="right-shelf">
+          <div class="shelf-label">🖐️ Open hand over this zone to DROP</div>
+          <div class="items-row" id="drp-items"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(async function(){
+  "use strict";
+  
+  const GRAB_MS = 500;
+  const ITEMS = [
+    { id:"i1", emoji:"🍬", label:"Candy"  },
+    { id:"i2", emoji:"🍭", label:"Lollipop" },
+    { id:"i3", emoji:"🍫", label:"Chocolate" },
+    { id:"i4", emoji:"🧁", label:"Cupcake" },
+    { id:"i5", emoji:"🍪", label:"Cookie" }
+  ];
+
+  let leftItems = ITEMS.slice();  // Items in left zone
+  let rightItems = [];            // Items in right zone
+  let cursorX = -200, cursorY = -200;
+  let gesture = "none";
+  let grabbedItem = null;   // {id, emoji, label, source: "left"|"right"}
+  let grabStartT = 0;
+  let grabHeld = false;
+  let handLm = null;
+  let rafId = null;
+
+  const video       = document.getElementById("video-bg");
+  const lmCanvas     = document.getElementById("lm-canvas");
+  const lmCtx      = lmCanvas.getContext("2d");
+  const cursorEl    = document.getElementById("cursor");
+  const ghostEl     = document.getElementById("ghost-el");
+  const gLabel      = document.getElementById("gesture-label");
+  const camDot      = document.getElementById("cam-dot");
+  const camTxt      = document.getElementById("cam-text");
+  const srcItems    = document.getElementById("src-items");
+  const drpItems    = document.getElementById("drp-items");
+  const leftShelf   = document.getElementById("left-shelf");
+  const rightShelf  = document.getElementById("right-shelf");
+  const slEl        = document.getElementById("sl");
+  const srEl        = document.getElementById("sr");
+  const progFill    = document.getElementById("prog-fill");
+  const loadOv      = document.getElementById("loading");
+  const guidOv      = document.getElementById("guide");
+  const resetBtn    = document.getElementById("reset-btn");
+
+  /* ── Toast ─────────────────────────────────── */
+  let toastT = null;
+  function toast(msg){
+    var t = document.getElementById("toast");
+    if(!t){ t=document.createElement("div"); t.id="toast"; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function(){ t.classList.remove("show"); },2200);
+  }
+
+  /* ── Render items ──────────────────────────── */
+  function renderItems(){
+    // Left zone
+    srcItems.innerHTML="";
+    for(var i=0;i<leftItems.length;i++){
+      var it=leftItems[i];
+      var d=document.createElement("div");
+      d.className="item"; d.dataset.id=it.id; d.dataset.zone="left";
+      d.innerHTML="<span>"+it.emoji+"</span><span class=\"item-lbl\">"+it.label+"</span>";
+      srcItems.appendChild(d);
+    }
+    slEl.textContent=leftItems.length;
+    
+    // Right zone
+    drpItems.innerHTML="";
+    for(var i=0;i<rightItems.length;i++){
+      var it=rightItems[i];
+      var d=document.createElement("div");
+      d.className="item"; d.dataset.id=it.id; d.dataset.zone="right";
+      d.innerHTML="<span>"+it.emoji+"</span><span class=\"item-lbl\">"+it.label+"</span>";
+      drpItems.appendChild(d);
+    }
+    srEl.textContent=rightItems.length;
+  }
+  
+  renderItems();
+
+  /* ── Hit test ─────────────────────────────── */
+  function hitTest(x,y){
+    // Check if over reset button
+    var rb=resetBtn.getBoundingClientRect();
+    if(x>=rb.left && x<=rb.right && y>=rb.top && y<=rb.bottom) return {type:"reset",zone:null};
+    
+    var el=document.elementFromPoint(x,y);
+    if(el){
+      var it=el.closest ? el.closest(".item") : null;
+      if(it){
+        var zone = it.dataset.zone || (srcItems.contains(it) ? "left" : "right");
+        return {type:"item",el:it,zone:zone};
+      }
+    }
+    // Check if over left shelf (drop target if holding item from right)
+    var rl=leftShelf.getBoundingClientRect();
+    if(x>=rl.left && x<=rl.right && y>=rl.top && y<=rl.bottom) return {type:"drop",zone:"left"};
+    // Check if over right shelf
+    var rr=rightShelf.getBoundingClientRect();
+    if(x>=rr.left && x<=rr.right && y>=rr.top && y<=rr.bottom) return {type:"drop",zone:"right"};
+    return null;
+  }
+
+  function cancelGrab(){
+    if(grabbedItem && grabbedItem.el) grabbedItem.el.classList.remove("grabbed");
+    grabbedItem=null; grabHeld=false; grabStartT=0; ghostEl.style.display="none";
+    leftShelf.classList.remove("drop-hover","drop-ok");
+    rightShelf.classList.remove("drop-hover","drop-ok");
+    resetBtn.classList.remove("btn-hover");
+  }
+
+  /* ── Main gesture handler ─────────────────── */
+  function onGesture(g,x,y){
+    cursorEl.style.display="block";
+    cursorEl.style.left=x+"px"; cursorEl.style.top=y+"px";
+    cursorEl.className=g;
+
+    // Always update ghost position if item is grabbed
+    if(grabbedItem){
+      ghostEl.style.left=x+"px"; ghostEl.style.top=y+"px";
+    }
+
+    var hi=document.querySelectorAll(".item.hovered");
+    for(var i=0;i<hi.length;i++) hi[i].classList.remove("hovered");
+    leftShelf.classList.remove("drop-hover","drop-ok");
+    rightShelf.classList.remove("drop-hover","drop-ok");
+    resetBtn.classList.remove("btn-hover");
+
+    var hit=hitTest(x,y);
+    if(hit){
+      if(hit.type==="item" && !grabbedItem){ hit.el.classList.add("hovered"); }
+      else if(hit.type==="drop" && grabbedItem){ 
+        if(hit.zone==="left") leftShelf.classList.add("drop-hover");
+        else rightShelf.classList.add("drop-hover");
+      }
+      else if(hit.type==="reset"){
+        resetBtn.classList.add("btn-hover");
+        // Grab over reset button to trigger reload
+        if(g==="grab"){
+          if(grabStartT===0) grabStartT=Date.now();
+          if(Date.now()-grabStartT>=GRAB_MS && !grabHeld){
+            grabHeld=true;
+            toast("Resetting...");
+            setTimeout(function(){ location.reload(); },300);
+          }
+        }
+      }
+    }
+
+    // Update gesture label
+    var GM={hover:"✋ Hovering",grab:"✊ Grabbing",release:"🖐️ Release to drop"};
+    gLabel.textContent=GM[g]||"—";
+    gLabel.className=(g==="none")?"":g;
+
+    // GRAB gesture - make fist to grab
+    if(g==="grab"){
+      if(!grabbedItem && hit && hit.type==="item"){
+        if(grabStartT===0) grabStartT=Date.now();
+        if(Date.now()-grabStartT>=GRAB_MS && !grabHeld){
+          grabHeld=true;
+          var id=hit.el.dataset.id;
+          var zone=hit.zone;
+          var sourceArr = zone==="left" ? leftItems : rightItems;
+          for(var j=0;j<sourceArr.length;j++){ if(sourceArr[j].id===id){ var it=sourceArr[j]; break; } }
+          if(it){
+            grabbedItem={id:it.id,emoji:it.emoji,label:it.label,sourceZone:zone,el:hit.el};
+            hit.el.classList.add("grabbed");
+            ghostEl.textContent=it.emoji; ghostEl.style.display="flex";
+            toast(it.emoji+" grabbed! Move to "+(zone==="left"?"right":"left")+" zone, then open hand to drop.");
+          }
+        }
+      }
+    } 
+    // RELEASE gesture - open hand to drop
+    else if(g==="release") {
+      if(grabbedItem){
+        if(hit && hit.type==="drop"){
+          // Can't drop in same zone
+          if(hit.zone !== grabbedItem.sourceZone){
+            var git=grabbedItem;
+            // Remove from source
+            var srcArr = git.sourceZone==="left" ? leftItems : rightItems;
+            var dstArr = git.sourceZone==="left" ? rightItems : leftItems;
+            var newSrc=[];
+            for(var j=0;j<srcArr.length;j++){ if(srcArr[j].id!==git.id) newSrc.push(srcArr[j]); }
+            if(git.sourceZone==="left") leftItems=newSrc; else rightItems=newSrc;
+            dstArr.push({id:git.id,emoji:git.emoji,label:git.label});
+            if(git.sourceZone==="left") rightItems=dstArr; else leftItems=dstArr;
+            
+            renderItems();
+            if(hit.zone==="left") leftShelf.classList.add("drop-ok");
+            else rightShelf.classList.add("drop-ok");
+            setTimeout(function(){ leftShelf.classList.remove("drop-ok"); rightShelf.classList.remove("drop-ok"); },800);
+            toast(git.emoji+" dropped in "+(hit.zone==="left"?"left":"right")+" zone!");
+          } else {
+            toast("Can't drop in same zone! Move to other side.");
+          }
+        } else {
+          toast("Open hand over the other zone to release!");
+        }
+        cancelGrab();
+      }
+      grabStartT=0; grabHeld=false;
+    }
+    else {
+      // Hovering - reset grab timer (only if not over reset button with grab gesture)
+      if(!(hit && hit.type==="reset" && g==="grab")){
+        grabStartT=0; grabHeld=false;
+      }
+    }
+  }
+
+  /* ── Hand analysis (track THUMB) ─────── */
+  function analyzeHand(lm,W,H){
+    var pts=[];
+    for(var i=0;i<lm.length;i++){ pts.push({x:(1-lm[i].x)*W, y:lm[i].y*H}); }
+    
+    var middleOpen=lm[12].y<lm[10].y;
+    var indexOpen=lm[8].y<lm[6].y;
+    var ringOpen=lm[16].y<lm[14].y;
+    var pinkyOpen=lm[20].y<lm[18].y;
+    
+    var allClosed=!indexOpen&&!middleOpen&&!ringOpen&&!pinkyOpen;
+    var allOpen=indexOpen&&middleOpen&&ringOpen&&pinkyOpen;
+    
+    var g="hover";
+    if(allClosed) g="grab";
+    else if(allOpen) g="release";
+    
+    // Track THUMB tip (landmark 4)
+    return {g:g, cx:(1-lm[4].x)*W, cy:lm[4].y*H, pts:pts};
+  }
+
+  /* ── Draw landmarks ────────────────────────── */
+  function drawLM(pts){
+    lmCtx.clearRect(0,0,lmCanvas.width,lmCanvas.height);
+    if(!pts) return;
+    var CONN=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],
+                 [0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+    lmCtx.strokeStyle="rgba(79,142,247,0.35)"; lmCtx.lineWidth=1.5;
+    for(var i=0;i<CONN.length;i++){
+      var a=CONN[i][0], b=CONN[i][1];
+      lmCtx.beginPath(); lmCtx.moveTo(pts[a].x,pts[a].y); lmCtx.lineTo(pts[b].x,pts[b].y); lmCtx.stroke();
+    }
+    for(var i=0;i<pts.length;i++){
+      lmCtx.beginPath(); lmCtx.arc(pts[i].x,pts[i].y,i===4?6:3,0,Math.PI*2);
+      lmCtx.fillStyle=i===4?"#4f8ef7":"rgba(124,93,250,0.7)"; lmCtx.fill();
+    }
+  }
+
+  /* ── Detection loop ─────────────────────────── */
+  var lastFT=0;
+  function detFrame(ts){
+    rafId=requestAnimationFrame(detFrame);
+    if(!handLm||!video.videoWidth) return;
+    if(ts-lastFT<33) return; lastFT=ts;
+    var res=handLm.detectForVideo(video,ts);
+    if(res.landmarks&&res.landmarks.length>0){
+      var lm=res.landmarks[0];
+      var r=analyzeHand(lm,window.innerWidth,window.innerHeight);
+      cursorX=r.cx; 
+      cursorY=r.cy;
+      onGesture(r.g,cursorX,cursorY);
+      drawLM(r.pts);
+    } else {
+      gesture="none"; gLabel.textContent="— No hand"; gLabel.className="";
+      lmCtx.clearRect(0,0,lmCanvas.width,lmCanvas.height);
+      cursorEl.style.display="none"; ghostEl.style.display="none"; cancelGrab();
+    }
+  }
+
+  /* ── Init MediaPipe ────────────────────────── */
+  async function initMP(){
+    try {
+      progFill.style.width="20%";
+      var vision = window.vision;
+      if(!vision){ console.error("MediaPipe vision not loaded"); return false; }
+      var FilesetResolver = vision.FilesetResolver;
+      var HandLandmarker = vision.HandLandmarker;
+      
+      var fr=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+      progFill.style.width="60%";
+      handLm=await HandLandmarker.createFromOptions(fr,{
+        baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",delegate:"GPU"},
+        runningMode:"VIDEO", numHands:1
+      });
+      progFill.style.width="100%";
+      return true;
+    } catch(e){ console.error("MP init failed:",e); return false; }
+  }
+
+  async function startCam(){
+    try {
+      var s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}}});
+      video.srcObject=s; video.style.display="block"; await video.play();
+      camDot.classList.add("active"); camTxt.textContent="Camera on";
+      lmCanvas.width=window.innerWidth; lmCanvas.height=window.innerHeight;
+      requestAnimationFrame(detFrame);
+      return true;
+    } catch(e){ console.error("Cam failed:",e); return false; }
+  }
+
+  /* ── Reset function ────────────────────────── */
+  function resetAll(){
+    if(video.srcObject){
+      var tracks=video.srcObject.getTracks();
+      for(var i=0;i<tracks.length;i++) tracks[i].stop();
+      video.srcObject=null;
+    }
+    if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    
+    leftItems=ITEMS.slice();
+    rightItems=[];
+    grabbedItem=null;
+    grabHeld=false;
+    grabStartT=0;
+    handLm=null;
+    
+    sdEl.textContent="0";
+    srEl.textContent=leftItems.length;
+    renderItems();
+    cursorEl.style.display="none";
+    ghostEl.style.display="none";
+    gLabel.textContent="Initializing...";
+    gLabel.className="";
+    camDot.classList.remove("active");
+    camTxt.textContent="Camera off";
+    lmCtx.clearRect(0,0,lmCanvas.width,lmCanvas.height);
+    leftShelf.classList.remove("drop-hover","drop-ok");
+    rightShelf.classList.remove("drop-hover","drop-ok");
+    
+    resetBtn.style.display="none";
+    guidOv.style.display="flex";
+    toast("Reset! Ready to start again.");
+  }
+
+  /* ── Mouse fallback ────────────────────────── */
+  function enableMouseMode(){
+    camTxt.textContent="Mouse mode"; gLabel.textContent="Mouse mode"; cursorEl.style.display="block";
+    resetBtn.style.display="block";
+    toast("Mouse mode: click item to grab, drag to other zone, release to drop. Click Reset to restart.");
+    
+    var dragItem=null, dragEl=null, dragSourceZone=null;
+    
+    function onMouseDown(el, zone){
+      if(dragItem) return;
+      var id=el.dataset.id;
+      var srcArr = zone==="left" ? leftItems : rightItems;
+      var it=null;
+      for(var j=0;j<srcArr.length;j++){ if(srcArr[j].id===id){it=srcArr[j];break;} }
+      if(!it) return;
+      dragItem={id:it.id,emoji:it.emoji,label:it.label,sourceZone:zone};
+      dragEl=el;
+      dragSourceZone=zone;
+      el.classList.add("grabbed");
+      ghostEl.textContent=it.emoji; ghostEl.style.display="flex";
+      toast(it.emoji+" grabbed! Drag to "+(zone==="left"?"right":"left")+" zone, release to drop.");
+    }
+    
+    function onMouseMove(e){
+      cursorEl.style.left=e.clientX+"px"; cursorEl.style.top=e.clientY+"px";
+      if(dragItem){
+        ghostEl.style.left=e.clientX+"px"; ghostEl.style.top=e.clientY+"px";
+        var rl=leftShelf.getBoundingClientRect();
+        var rr=rightShelf.getBoundingClientRect();
+        leftShelf.classList.toggle("drop-hover", dragSourceZone!=="left" && e.clientX>=rl.left&&e.clientX<=rl.right&&e.clientY>=rl.top&&e.clientY<=rl.bottom);
+        rightShelf.classList.toggle("drop-hover", dragSourceZone!=="right" && e.clientX>=rr.left&&e.clientX<=rr.right&&e.clientY>=rr.top&&e.clientY<=rr.bottom);
+      }
+    }
+    
+    function onMouseUp(e){
+      if(dragItem){
+        var rl=leftShelf.getBoundingClientRect();
+        var rr=rightShelf.getBoundingClientRect();
+        var overLeft = e.clientX>=rl.left&&e.clientX<=rl.right&&e.clientY>=rl.top&&e.clientY<=rl.bottom;
+        var overRight = e.clientX>=rr.left&&e.clientX<=rr.right&&e.clientY>=rr.top&&e.clientY<=rr.bottom;
+        
+        if((dragSourceZone==="left" && overRight) || (dragSourceZone==="right" && overLeft)){
+          var dstZone = dragSourceZone==="left" ? "right" : "left";
+          var srcArr = dragSourceZone==="left" ? leftItems : rightItems;
+          var dstArr = dragSourceZone==="left" ? rightItems : leftItems;
+          var newSrc=[];
+          for(var j=0;j<srcArr.length;j++){ if(srcArr[j].id!==dragItem.id) newSrc.push(srcArr[j]); }
+          if(dragSourceZone==="left"){ leftItems=newSrc; rightItems=dstArr; }
+          else { rightItems=newSrc; leftItems=dstArr; }
+          dstArr.push({id:dragItem.id,emoji:dragItem.emoji,label:dragItem.label});
+          renderItems();
+          if(dstZone==="left") leftShelf.classList.add("drop-ok");
+          else rightShelf.classList.add("drop-ok");
+          setTimeout(function(){leftShelf.classList.remove("drop-ok");rightShelf.classList.remove("drop-ok");},800);
+          toast(dragItem.emoji+" dropped in "+dstZone+" zone!");
+        } else if(overLeft || overRight){
+          toast("Can't drop in same zone!");
+        }
+        if(dragEl) dragEl.classList.remove("grabbed");
+        dragItem=null; dragEl=null; dragSourceZone=null; ghostEl.style.display="none";
+        leftShelf.classList.remove("drop-hover"); rightShelf.classList.remove("drop-hover");
+      }
+    }
+    
+    // Bind events for items in both zones
+    function bindItems(){
+      var allItems=document.querySelectorAll(".item");
+      for(var i=0;i<allItems.length;i++){
+        (function(el){
+          el.addEventListener("mousedown",function(e){
+            onMouseDown(el, el.dataset.zone);
+          });
+        })(allItems[i]);
+      }
+    }
+    bindItems();
+    
+    // Re-bind after render
+    var origRender=renderItems;
+    window.addEventListener("mousemove",onMouseMove);
+    window.addEventListener("mouseup",onMouseUp);
+    
+    // Watch for DOM changes to re-bind
+    var observer=new MutationObserver(function(){ bindItems(); });
+    observer.observe(srcItems,{childList:true});
+    observer.observe(drpItems,{childList:true});
+  }
+
+  /* ── Bootstrap ─────────────────────────────── */
+  (async function(){
+    progFill.style.width="5%";
+    progFill.style.width="10%";
+    var mpLoaded = false;
+    
+    try {
+      if(window.vision && window.vision.HandLandmarker){
+        mpLoaded = true;
+      } else {
+        progFill.style.width="20%";
+        const { FilesetResolver, HandLandmarker } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+        window.vision = { FilesetResolver, HandLandmarker };
+        mpLoaded = true;
+        progFill.style.width="30%";
+      }
+      if(mpLoaded){
+        var mpOK = await initMP();
+        if(mpOK){ progFill.style.width="100%"; }
+      }
+    } catch(e){ console.log("MediaPipe not available:",e); }
+    
+    loadOv.style.display="none";
+    guidOv.style.display="flex";
+
+    document.getElementById("start-btn").onclick = async function(){
+      guidOv.style.display="none";
+      resetBtn.style.display="block";
+      try {
+        var c = await startCam();
+        if(!c) { enableMouseMode(); return; }
+      } catch(e) { enableMouseMode(); return; }
+      if(!handLm){
+        toast("Camera on! Loading hand tracking model, please wait...");
+        var mpOK = await initMP();
+        if(!mpOK){
+          toast("Hand tracking model failed to load. Use mouse mode with camera background.");
+          enableMouseMode();
+        }
+      }
+    };
+    document.getElementById("mouse-btn").onclick = function(){
+      guidOv.style.display="none"; resetBtn.style.display="block"; enableMouseMode();
+    };
+    resetBtn.onclick = function(){ toast("Resetting..."); setTimeout(function(){ location.reload(); },300); };
+  })();
+  
+  window.addEventListener("resize",function(){ lmCanvas.width=window.innerWidth; lmCanvas.height=window.innerHeight; });
+})();
+</script>
+</body>
+</html>
