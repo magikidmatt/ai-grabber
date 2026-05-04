@@ -80,12 +80,12 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
 <div id="guide" style="display:none">
   <div id="guide-box">
     <h2>Gesture Grab & Drop Candies</h2>
-    <p class="sub">Track thumb - grab candies and move them anywhere!</p>
+    <p class="sub">Track hand center - grab candies and move them anywhere!</p>
     <div class="gestures-grid">
-      <div class="g-card"><div class="g-icon">✋</div><div class="g-name">HOVER</div><div class="g-desc">Open hand - move cursor with thumb</div></div>
+      <div class="g-card"><div class="g-icon">✋</div><div class="g-name">HOVER</div><div class="g-desc">Open hand - move cursor with hand center</div></div>
       <div class="g-card"><div class="g-icon">✊</div><div class="g-name">GRAB</div><div class="g-desc">Make a fist over an item, hold ~0.5s to grab</div></div>
       <div class="g-card"><div class="g-icon">🖐️</div><div class="g-name">RELEASE / DROP</div><div class="g-desc">Open hand over any zone to release item</div></div>
-      <div class="g-card"><div class="g-icon">🎯</div><div class="g-name">THUMB</div><div class="g-desc">Cursor tracks your thumb tip</div></div>
+      <div class="g-card"><div class="g-icon">🎯</div><div class="g-name">HAND CENTER</div><div class="g-desc">Cursor tracks your hand center (Middle MCP)</div></div>
     </div>
     <p style="font-size:0.78rem;color:var(--dim);margin-bottom:20px">No camera? Click "Mouse Mode" to use mouse as fallback.</p>
     <div class="btn-row">
@@ -120,7 +120,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
           <div class="score-box"><div class="s-val" id="sr">0</div><div class="s-lbl">Right Items</div></div>
         </div>
         <div class="shelf" id="left-shelf">
-          <div class="shelf-label">✊ Make fist over an item to GRAB (hold 0.5s)</div>
+          <div class="shelf-label">✊ Make fist over an item to GRAB (hold 0.5s) - item disappears immediately!</div>
           <div class="items-row" id="src-items"></div>
         </div>
       </div>
@@ -238,7 +238,6 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
   }
 
   function cancelGrab(){
-    if(grabbedItem && grabbedItem.el) grabbedItem.el.classList.remove("grabbed");
     grabbedItem=null; grabHeld=false; grabStartT=0; ghostEl.style.display="none";
     leftShelf.classList.remove("drop-hover","drop-ok");
     rightShelf.classList.remove("drop-hover","drop-ok");
@@ -297,10 +296,18 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
           var id=hit.el.dataset.id;
           var zone=hit.zone;
           var sourceArr = zone==="left" ? leftItems : rightItems;
-          for(var j=0;j<sourceArr.length;j++){ if(sourceArr[j].id===id){ var it=sourceArr[j]; break; } }
+          var it=null;
+          for(var j=0;j<sourceArr.length;j++){ if(sourceArr[j].id===id){ it=sourceArr[j]; break; } }
           if(it){
-            grabbedItem={id:it.id,emoji:it.emoji,label:it.label,sourceZone:zone,el:hit.el};
-            hit.el.classList.add("grabbed");
+            grabbedItem={id:it.id,emoji:it.emoji,label:it.label,sourceZone:zone};
+            
+            // IMMEDIATELY remove item from source array and re-render
+            var newSrc=[];
+            for(var j=0;j<sourceArr.length;j++){ if(sourceArr[j].id!==it.id) newSrc.push(sourceArr[j]); }
+            if(zone==="left") leftItems=newSrc; else rightItems=newSrc;
+            renderItems();
+            
+            // Show ghost following hand
             ghostEl.textContent=it.emoji; ghostEl.style.display="flex";
             toast(it.emoji+" grabbed! Move to "+(zone==="left"?"right":"left")+" zone, then open hand to drop.");
           }
@@ -363,8 +370,8 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
     if(allClosed) g="grab";
     else if(allOpen) g="release";
     
-    // Track THUMB tip (landmark 4)
-    return {g:g, cx:(1-lm[4].x)*W, cy:lm[4].y*H, pts:pts};
+    // Track HAND CENTER (landmark 9 = Middle finger MCP joint)
+    return {g:g, cx:(1-lm[9].x)*W, cy:lm[9].y*H, pts:pts};
   }
 
   /* ── Draw landmarks ────────────────────────── */
@@ -380,7 +387,7 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
     }
     for(var i=0;i<pts.length;i++){
       lmCtx.beginPath(); lmCtx.arc(pts[i].x,pts[i].y,i===4?6:3,0,Math.PI*2);
-      lmCtx.fillStyle=i===4?"#4f8ef7":"rgba(124,93,250,0.7)"; lmCtx.fill();
+      lmCtx.fillStyle=i===9?"#4f8ef7":"rgba(124,93,250,0.7)"; lmCtx.fill();
     }
   }
 
