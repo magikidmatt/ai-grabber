@@ -11,6 +11,11 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
 #app{width:100vw;height:100vh;display:flex;flex-direction:column}
 #header{display:flex;align-items:center;justify-content:space-between;padding:10px 24px;background:var(--panel);border-bottom:1px solid var(--border);z-index:10}
 #header h1{font-size:1.1rem;font-weight:700;letter-spacing:0.5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#header-brand{display:flex;align-items:center;gap:10px}
+#header-brand img{height:36px;width:auto;object-fit:contain;filter:drop-shadow(0 0 6px rgba(79,142,247,0.4))}
+#header-brand .brand-text{display:flex;flex-direction:column;line-height:1.1}
+#header-brand .brand-title{font-size:1.05rem;font-weight:700;letter-spacing:0.4px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#header-brand .brand-sub{font-size:0.65rem;color:var(--dim);letter-spacing:0.8px;text-transform:uppercase}
 #gesture-status{display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--dim)}
 #gesture-label{background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.78rem;font-weight:600;letter-spacing:0.5px;color:var(--accent);min-width:180px;text-align:center;transition:color 0.2s,border-color 0.2s}
 #gesture-label.grab{color:var(--yellow);border-color:var(--yellow)}
@@ -71,7 +76,8 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
 <body>
 
 <div id="loading">
-  <div style="font-size:2.2rem">👍</div>
+  <img src="magikidlogo.png" alt="Magikid Logo" style="height:60px;filter:drop-shadow(0 0 12px rgba(79,142,247,0.6));margin-bottom:4px">
+  <div style="font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,#4f8ef7,#7c5dfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2px">Magikid AI Robotics Lab</div>
   <h3>Loading hand tracking model...</h3>
   <div class="pbar"><div class="pfill" id="prog-fill"></div></div>
   <p class="sub">Powered by MediaPipe / Chrome or Edge recommended</p>
@@ -79,7 +85,13 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
 
 <div id="guide" style="display:none">
   <div id="guide-box">
-    <h2>Gesture Grab & Drop Candies</h2>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:6px">
+      <img src="magikidlogo.png" alt="Magikid Logo" style="height:40px;filter:drop-shadow(0 0 8px rgba(79,142,247,0.5))">
+      <div style="text-align:left">
+        <div style="font-size:1.35rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1">Magikid AI Robotics Lab</div>
+        <div style="font-size:0.78rem;color:var(--dim);letter-spacing:0.5px">Gesture Grab &amp; Drop Candies</div>
+      </div>
+    </div>
     <p class="sub">Track hand center - grab candies and move them anywhere!</p>
     <div class="gestures-grid">
       <div class="g-card"><div class="g-icon">✋</div><div class="g-name">HOVER</div><div class="g-desc">Open hand - move cursor with hand center</div></div>
@@ -100,7 +112,13 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);overflow
 
 <div id="app">
   <div id="header">
-    <h1>Gesture Grab & Drop Candies</h1>
+    <div id="header-brand">
+      <img src="magikidlogo.png" alt="Magikid Logo">
+      <div class="brand-text">
+        <span class="brand-title">Magikid AI Robotics Lab</span>
+        <span class="brand-sub">Gesture Grab &amp; Drop Candies</span>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;gap:14px">
       <div id="gesture-status">
         <div id="gesture-label">Initializing...</div>
